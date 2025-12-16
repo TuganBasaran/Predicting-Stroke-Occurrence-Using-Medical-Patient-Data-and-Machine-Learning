@@ -43,6 +43,27 @@ print('-' * 50)
 print(tree_conf_matrix)
 print('-' * 50)
 
+# ROC Curve & AUC (Decision Tree)
+dt_probs = tree_model.predict_proba(dataset.X_test)
+dt_stroke_probs = dt_probs[:, 1]
+
+# AUC hesaplama
+dt_auc = roc_auc_score(Y_test, dt_stroke_probs)
+
+# ROC curve noktaları
+dt_fpr, dt_tpr, dt_thresholds = roc_curve(Y_test, dt_stroke_probs)
+
+print(f"Decision Tree AUC: {dt_auc:.4f}")
+
+plt.figure()
+plt.plot(dt_fpr, dt_tpr, label=f"Decision Tree (AUC = {dt_auc:.2f})")
+plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guess")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve - Decision Tree")
+plt.legend()
+plt.show()
+
 
 
 
@@ -69,11 +90,10 @@ print('-' * 50)
 
 # ROC Curve & AUC (Random Forest)
 
-# RF test set olasılıkları
 rf_probs = rf_model.predict_proba(dataset.X_test)
 rf_stroke_probs = rf_probs[:, 1]
 
-# AUC hesapla
+# AUC hesaplama
 rf_auc = roc_auc_score(Y_test, rf_stroke_probs)
 
 # ROC curve noktaları
@@ -81,7 +101,6 @@ rf_fpr, rf_tpr, rf_thresholds = roc_curve(Y_test, rf_stroke_probs)
 
 print(f"Random Forest AUC: {rf_auc:.4f}")
 
-# ROC curve çiz
 plt.figure()
 plt.plot(rf_fpr, rf_tpr, label=f"Random Forest (AUC = {rf_auc:.2f})")
 plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guess")
@@ -90,7 +109,6 @@ plt.ylabel("True Positive Rate")
 plt.title("ROC Curve - Random Forest")
 plt.legend()
 plt.show()
-
 
 
 
@@ -132,7 +150,6 @@ print('-' * 50)
 # ROC Curve & AUC (Logistic Regression)
 y_true = Y_test
 
-# Stroke olasılıkları
 # (threshold'tan BAĞIMSIZ)
 auc_score = roc_auc_score(y_true, stroke_probs)
 
