@@ -2,6 +2,7 @@ from data_factory.data_factory import StrokeDataset
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve, roc_auc_score
 import matplotlib.pyplot as plt
@@ -17,7 +18,10 @@ print('-' * 50)
 print(dataset.train_df.columns) 
 print(dataset.train_df.values[0])
 
+
+
 #DECISION TREE CLASSIFIER
+
 # Bu tarz hiperparametreler oynanabilir - şu anki parametreler arbitrary'dir 
 tree_model = DecisionTreeClassifier(criterion= "entropy", splitter= "best")
 
@@ -38,6 +42,57 @@ print('-' * 50)
 print('-' * 50)
 print(tree_conf_matrix)
 print('-' * 50)
+
+
+
+
+# RANDOM FOREST CLASSIFIER
+
+rf_model = RandomForestClassifier(
+    n_estimators=200,
+    max_depth=None,
+    class_weight="balanced",
+    random_state=42
+)
+
+rf_model.fit(dataset.X_train, dataset.Y_train)
+
+rf_preds = rf_model.predict(dataset.X_test)
+
+print("Random Forest Results (default threshold = 0.5)")
+print('-' * 50)
+print(classification_report(Y_test, rf_preds))
+print('-' * 50)
+print(confusion_matrix(Y_test, rf_preds))
+print('-' * 50)
+
+
+# ROC Curve & AUC (Random Forest)
+
+# RF test set olasılıkları
+rf_probs = rf_model.predict_proba(dataset.X_test)
+rf_stroke_probs = rf_probs[:, 1]
+
+# AUC hesapla
+rf_auc = roc_auc_score(Y_test, rf_stroke_probs)
+
+# ROC curve noktaları
+rf_fpr, rf_tpr, rf_thresholds = roc_curve(Y_test, rf_stroke_probs)
+
+print(f"Random Forest AUC: {rf_auc:.4f}")
+
+# ROC curve çiz
+plt.figure()
+plt.plot(rf_fpr, rf_tpr, label=f"Random Forest (AUC = {rf_auc:.2f})")
+plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guess")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve - Random Forest")
+plt.legend()
+plt.show()
+
+
+
 
 
 #LOGISTIC REGRESSION CLASSIFIER
@@ -98,10 +153,8 @@ plt.show()
 
 
 
-
-
 # =====================================
-# VALIDATION SET ile THRESHOLD SEÇİMİ
+# VALIDATION SET ile THRESHOLD SEÇİMİ LOGISTIC REGRESSION İÇİN
 # =====================================
 
 # print("\nVALIDATION SET THRESHOLD ANALYSIS")
@@ -132,3 +185,37 @@ plt.show()
 #     f1 = report["1"]["f1-score"]
 #
 #     print(f"Threshold = {t:.1f} | Precision = {precision:.2f} | Recall = {recall:.2f} | F1 = {f1:.2f}")
+
+
+
+
+# =========================
+# RANDOM FOREST - PROBABILITY & THRESHOLD ANALYSIS (Random Forest için threshold seçim kodu)
+# =========================
+# rf_probs = rf_model.predict_proba(dataset.X_test)
+# rf_stroke_probs = rf_probs[:, 1]
+#
+# print("\nRandom Forest Threshold Analysis (Test Set)")
+# print("-" * 50)
+#
+# rf_thresholds = [0.2, 0.3, 0.4, 0.5]
+#
+# for t in rf_thresholds:
+#     rf_preds_t = (rf_stroke_probs >= t).astype(int)
+#
+#     report = classification_report(
+#         Y_test,
+#         rf_preds_t,
+#         output_dict=True,
+#         zero_division=0
+#     )
+#
+#     precision = report["1"]["precision"]
+#     recall = report["1"]["recall"]
+#     f1 = report["1"]["f1-score"]
+#
+#     print(f"Threshold = {t:.1f} | Precision = {precision:.2f} | Recall = {recall:.2f} | F1 = {f1:.2f}")
+#
+#     print("Confusion Matrix:")
+#     print(confusion_matrix(Y_test, rf_preds_t))
+#     print("-" * 50)
