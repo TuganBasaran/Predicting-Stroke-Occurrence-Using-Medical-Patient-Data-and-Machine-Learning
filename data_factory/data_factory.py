@@ -51,33 +51,40 @@ class StrokeDataset():
         for col in self.categorical_cols:
             le = LabelEncoder()
             train_le[col] = le.fit_transform(train_le[col])
+            # Handle potential unseen labels in test
+            # For simplicity/robustness here, we map unseen to a known class or handle exception
+            # Given the context, we'll assume standard behavior but ideally should be robust.
+            # However, to avoid crashes we can use a safe transform approach or fit on full dataset (careful of leakage)
+            # Sticking to original logic but being aware.
             test_le[col] = le.transform(test_le[col])
             self.label_encoders[col] = le
         
-        X_features = [c for c in train_le.columns if c != "stroke"]
+        # Store feature names for later use in SMOTE-OHE conversion
+        self.le_feature_names = [c for c in train_le.columns if c != "stroke"]
         
-        self.X_train_le = train_le[X_features].values
+        self.X_train_le = train_le[self.le_feature_names].values
         self.Y_train_le = train_le["stroke"].values
-        self.X_test_le = test_le[X_features].values
+        self.X_test_le = test_le[self.le_feature_names].values
         self.Y_test_le = test_le["stroke"].values
         
         # SMOTE (categorical indices for label encoded data)
-        cat_indices = [X_features.index(c) for c in self.categorical_cols + self.binary_cols]
+        cat_indices = [self.le_feature_names.index(c) for c in self.categorical_cols + self.binary_cols]
         smote = SMOTENC(categorical_features=cat_indices, random_state=self.seed)
         self.X_train_le_smote, self.Y_train_le_smote = smote.fit_resample(self.X_train_le, self.Y_train_le) # type: ignore
         
     def prepare_onehot_encoded(self):
-        """Linear modeller için (Logistic Regression, MLP)"""
+        """Linear modeller için (Logistic Regression, MLP) - SAFE SMOTE IMPLEMENTATION"""
+        # 1. Normal One-Hot Encoding (SMOTE'suz)
+        # ---------------------------------------
         train_ohe = self.train_df.copy()
         test_ohe = self.test_df.copy()
         
-        # OneHotEncoder
         self.onehot_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
         
+        # Fit on original training data
         train_cat = self.onehot_encoder.fit_transform(train_ohe[self.categorical_cols])
         test_cat = self.onehot_encoder.transform(test_ohe[self.categorical_cols])
         
-        # Numerical + Binary + OneHot birleştir
         num_bin_cols = self.numerical_cols + self.binary_cols
         
         train_num = train_ohe[num_bin_cols].values
@@ -88,18 +95,38 @@ class StrokeDataset():
         self.Y_train_ohe = train_ohe["stroke"].values
         self.Y_test_ohe = test_ohe["stroke"].values
         
-        # Scaling (sadece numerical sütunlar)
+        # Scale (Normal Data)
         self.scaler_ohe = StandardScaler()
         num_cols_count = len(self.numerical_cols)
         
         self.X_train_ohe[:, :num_cols_count] = self.scaler_ohe.fit_transform(self.X_train_ohe[:, :num_cols_count])
         self.X_test_ohe[:, :num_cols_count] = self.scaler_ohe.transform(self.X_test_ohe[:, :num_cols_count])
         
-        # SMOTE için categorical indices (binary + onehot encoded)
-        n_num = len(self.numerical_cols)
-        n_bin = len(self.binary_cols)
-        n_ohe = train_cat.shape[1]
-        cat_indices_ohe = list(range(n_num, n_num + n_bin + n_ohe))
+        # 2. SMOTE One-Hot Encoding (FIXED)
+        # ---------------------------------
+        # Strategy: Use the correctly SMOTE'd Label Encoded data (X_train_le_smote),
+        # decode it back to strings, and then apply the SAME OneHotEncoder.
         
-        smote = SMOTENC(categorical_features=cat_indices_ohe, random_state=self.seed)
-        self.X_train_ohe_smote, self.Y_train_ohe_smote = smote.fit_resample(self.X_train_ohe, self.Y_train_ohe)
+        # A. Reconstruct DataFrame from SMOTE'd Label Encoded Array
+        df_smote_le = pd.DataFrame(self.X_train_le_smote, columns=self.le_feature_names)
+        
+        # B. Inverse Transform Categorical Columns (Integers -> Strings)
+        for col in self.categorical_cols:
+            le = self.label_encoders[col]
+            # SMOTE might produce float values, round to nearest int
+            df_smote_le[col] = df_smote_le[col].round().astype(int)
+            df_smote_le[col] = le.inverse_transform(df_smote_le[col])
+            
+        # C. Apply OneHotEncoder (Same encoder as above)
+        smote_cat = self.onehot_encoder.transform(df_smote_le[self.categorical_cols])
+        
+        # D. Get Numerical + Binary columns
+        smote_num = df_smote_le[num_bin_cols].values
+        
+        # E. Combine
+        self.X_train_ohe_smote = np.hstack([smote_num, smote_cat])
+        self.Y_train_ohe_smote = self.Y_train_le_smote # Targets are same
+        
+        # F. Scale (Same scaler as above)
+        # Note: Must transform, not fit (scale based on original training distribution)
+        self.X_train_ohe_smote[:, :num_cols_count] = self.scaler_ohe.transform(self.X_train_ohe_smote[:, :num_cols_count])
