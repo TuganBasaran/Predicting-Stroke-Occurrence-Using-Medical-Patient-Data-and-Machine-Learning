@@ -362,10 +362,10 @@ plt.legend()
 plt.show()
 
 
-# ===================== KARŞILAŞTIRMA GRAFİĞİ =====================
+# ===================== Comparison Plot =====================
 
 print("\n" + "=" * 50)
-print("TÜM MODELLERİN KARŞILAŞTIRMASI")
+print("ALL MODELS COMPARISON")
 print("=" * 50)
 
 plt.figure(figsize=(12, 5))
@@ -398,12 +398,144 @@ plt.tight_layout()
 plt.show()
 
 print("\n" + "=" * 50)
-print("AUC KARŞILAŞTIRMA TABLOSU")
+
+# ===========================================================================
+# ===================== VOTING MECHANISM (MANUAL SOFT VOTING) ===============
+# ===========================================================================
+
+print('\n' + '=' * 50)
+print('TRAINING AND TESTING VOTING MECHANISM')
+print('=' * 50)
+
+# ---------------------------------------------------------------------------
+# 1. Voting (Without SMOTE)
+# ---------------------------------------------------------------------------
+print("\nVoting Classifier (Without SMOTE) - Manual Soft Voting")
+print("-" * 50)
+
+# Tahmin Olasılıkları (Probability Averaging)
+# Modellerin kendi encoding'lerine göre eğitilmiş versiyonlarını kullanıyoruz.
+# Tree-based -> X_test_le
+# Linear/MLP -> X_test_ohe
+
+# Olasılıkları al (Class 1 için)
+p1 = tree_model.predict_proba(X_test_le)[:, 1]
+p2 = rf_model.predict_proba(X_test_le)[:, 1]
+p3 = log_reg_model.predict_proba(X_test_ohe)[:, 1]
+p4 = mlp.predict_proba(X_test_ohe)[:, 1]
+
+# Olasılıkların Ortalaması (Soft Voting)
+voting_probs = (p1 + p2 + p3 + p4) / 4
+
+# Tahmin (Threshold 0.5)
+voting_preds = (voting_probs >= 0.5).astype(int)
+
+print("Voting Model Results (Without SMOTE)")
+print('-' * 50)
+print(classification_report(Y_test, voting_preds, digits=3))
+print('-' * 50)
+print(confusion_matrix(Y_test, voting_preds))
+print('-' * 50)
+
+# ROC & AUC
+voting_auc = roc_auc_score(Y_test, voting_probs)
+voting_fpr, voting_tpr, _ = roc_curve(Y_test, voting_probs)
+print(f"Voting Model (No SMOTE) AUC: {voting_auc:.4f}")
+
+plt.figure()
+plt.plot(voting_fpr, voting_tpr, label=f"Voting Model (AUC = {voting_auc:.2f})")
+plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guess")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve - Voting Model (Without SMOTE)")
+plt.legend()
+plt.show()
+
+
+# ---------------------------------------------------------------------------
+# 2. Voting (With SMOTE)
+# ---------------------------------------------------------------------------
+print("\nVoting Classifier (With SMOTE) - Manual Soft Voting")
+print("-" * 50)
+
+# Olasılıkları al (SMOTE Modelleri)
+p1_smote = tree_model_smote.predict_proba(X_test_le)[:, 1]
+p2_smote = rf_model_smote.predict_proba(X_test_le)[:, 1]
+p3_smote = log_reg_model_smote.predict_proba(X_test_ohe)[:, 1]
+p4_smote = mlp_smote.predict_proba(X_test_ohe)[:, 1]
+
+# Olasılıkların Ortalaması
+voting_probs_smote = (p1_smote + p2_smote + p3_smote + p4_smote) / 4
+
+# Tahmin
+voting_preds_smote = (voting_probs_smote >= 0.5).astype(int)
+
+print("Voting Model Results (With SMOTE)")
+print('-' * 50)
+print(classification_report(Y_test, voting_preds_smote, digits=3))
+print('-' * 50)
+print(confusion_matrix(Y_test, voting_preds_smote))
+print('-' * 50)
+
+# ROC & AUC
+voting_auc_smote = roc_auc_score(Y_test, voting_probs_smote)
+voting_fpr_smote, voting_tpr_smote, _ = roc_curve(Y_test, voting_probs_smote)
+print(f"Voting Model (SMOTE) AUC: {voting_auc_smote:.4f}")
+
+plt.figure()
+plt.plot(voting_fpr_smote, voting_tpr_smote, label=f"Voting Model SMOTE (AUC = {voting_auc_smote:.2f})")
+plt.plot([0, 1], [0, 1], linestyle="--", label="Random Guess")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve - Voting Model (With SMOTE)")
+plt.legend()
+plt.show()
+
+
+# ---------------------------------------------------------------------------
+# 3. Final Comparison
+# ---------------------------------------------------------------------------
+print("\n" + "=" * 50)
+print("FINAL COMPARISON (INCLUDING VOTING)")
 print("=" * 50)
-print(f"{'Model':<25} {'Without SMOTE':<15} {'With SMOTE':<15}")
+
+plt.figure(figsize=(12, 5))
+
+# SMOTE'suz
+plt.subplot(1, 2, 1)
+plt.plot(dt_fpr, dt_tpr, label=f"DT ({dt_auc:.2f})")
+plt.plot(rf_fpr, rf_tpr, label=f"RF ({rf_auc:.2f})")
+plt.plot(log_fpr, log_tpr, label=f"LR ({log_auc:.2f})")
+plt.plot(mlp_fpr, mlp_tpr, label=f"MLP ({mlp_auc:.2f})")
+plt.plot(voting_fpr, voting_tpr, 'k--', linewidth=2, label=f"Voting ({voting_auc:.2f})") # Voting siyah kesik çizgi
+plt.plot([0, 1], [0, 1], linestyle=":", color="gray")
+plt.xlabel("FPR")
+plt.ylabel("TPR")
+plt.title("ROC Curves - Without SMOTE")
+plt.legend(loc="lower right", fontsize='small')
+
+# SMOTE'lu
+plt.subplot(1, 2, 2)
+plt.plot(dt_fpr_smote, dt_tpr_smote, label=f"DT ({dt_auc_smote:.2f})")
+plt.plot(rf_fpr_smote, rf_tpr_smote, label=f"RF ({rf_auc_smote:.2f})")
+plt.plot(log_fpr_smote, log_tpr_smote, label=f"LR ({log_auc_smote:.2f})")
+plt.plot(mlp_fpr_smote, mlp_tpr_smote, label=f"MLP ({mlp_auc_smote:.2f})")
+plt.plot(voting_fpr_smote, voting_tpr_smote, 'k--', linewidth=2, label=f"Voting ({voting_auc_smote:.2f})")
+plt.plot([0, 1], [0, 1], linestyle=":", color="gray")
+plt.xlabel("FPR")
+plt.ylabel("TPR")
+plt.title("ROC Curves - With SMOTE")
+plt.legend(loc="lower right", fontsize='small')
+
+plt.tight_layout()
+plt.show()
+
+print(f"{'Model':<25} {'No SMOTE':<15} {'SMOTE':<15}")
 print("-" * 55)
 print(f"{'Decision Tree':<25} {dt_auc:<15.4f} {dt_auc_smote:<15.4f}")
 print(f"{'Random Forest':<25} {rf_auc:<15.4f} {rf_auc_smote:<15.4f}")
 print(f"{'Logistic Regression':<25} {log_auc:<15.4f} {log_auc_smote:<15.4f}")
 print(f"{'MLP':<25} {mlp_auc:<15.4f} {mlp_auc_smote:<15.4f}")
+print(f"{'Voting (Soft)':<25} {voting_auc:<15.4f} {voting_auc_smote:<15.4f}")
+
 
